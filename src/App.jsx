@@ -6,22 +6,20 @@ import {
 } from "recharts";
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
-const C = {
-  bg: "#0a0e1a",
-  surface: "#111827",
-  card: "#162032",
-  border: "#1e3a5f",
-  accent1: "#00d4ff",
-  accent2: "#ff6b6b",
-  accent3: "#ffd166",
-  accent4: "#06ffa5",
-  accent5: "#bf5af2",
-  text: "#e2e8f0",
-  muted: "#64748b",
-  win: "#06ffa5",
-  lose: "#ff6b6b",
-  neutral: "#94a3b8",
-};
+function makeTheme(dark) {
+  return dark ? {
+    bg: "#0a0e1a", surface: "#111827", card: "#162032", border: "#1e3a5f",
+    accent1: "#00d4ff", accent2: "#ff6b6b", accent3: "#ffd166",
+    accent4: "#06ffa5", accent5: "#bf5af2",
+    text: "#e2e8f0", muted: "#64748b", win: "#06ffa5", lose: "#ff6b6b", neutral: "#94a3b8",
+  } : {
+    bg: "#f0f4f8", surface: "#ffffff", card: "#ffffff", border: "#cbd5e1",
+    accent1: "#0284c7", accent2: "#e11d48", accent3: "#d97706",
+    accent4: "#059669", accent5: "#7c3aed",
+    text: "#1e293b", muted: "#64748b", win: "#059669", lose: "#e11d48", neutral: "#475569",
+  };
+}
+let C = makeTheme(true);
 
 // ─── MATH UTILITIES ───────────────────────────────────────────────────────────
 function normalCDF(x) {
@@ -397,6 +395,17 @@ function RangeSlider({ label, min, max, step, valueMin, valueMax, onChange, unit
         </span>
       </div>
       {description && <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>{description}</div>}
+      {/* Color legend */}
+      <div style={{ display: "flex", gap: 14, marginBottom: 5 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.accent1 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent1, display: "inline-block" }} />
+          Lower bound
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.accent2 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent2, display: "inline-block" }} />
+          Upper bound
+        </span>
+      </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ color: C.muted, fontSize: 11, width: 40 }}>{min}{unit}</span>
         <div style={{ flex: 1, position: "relative", height: 20 }}>
@@ -466,17 +475,17 @@ function HeatmapCell({ value, label }) {
   return (
     <td style={{
       background: bg, width: 60, height: 40, textAlign: "center",
-      fontSize: 10, color: "#000", fontWeight: 700, border: "1px solid #0a0e1a",
+      fontSize: 10, color: "#000", fontWeight: 700, border: `1px solid ${C.bg}`,
     }}>
       {(value * 100).toFixed(0)}%
     </td>
   );
 }
 
-const TOOLTIP_STYLE = {
+const getTooltipStyle = () => ({
   background: C.surface, border: `1px solid ${C.border}`,
   borderRadius: 8, color: C.text, fontSize: 11, fontFamily: "monospace",
-};
+});
 
 // ─── ASSUMPTIONS SECTION ──────────────────────────────────────────────────────
 function AssumptionsSection() {
@@ -558,6 +567,9 @@ function AssumptionsSection() {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [darkMode, setDarkMode] = useState(true);
+  C = makeTheme(darkMode); // update module-level theme on every render
+
   const [params, setParams] = useState({
     samplesPerDayMin: 200, samplesPerDayMax: 2000,
     durationMin: 7, durationMax: 60,
@@ -620,9 +632,28 @@ export default function App() {
     <div style={{
       background: C.bg, minHeight: "100vh", color: C.text,
       fontFamily: "'Courier New', monospace", padding: 24,
+      transition: "background 0.3s, color 0.3s",
     }}>
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <div style={{ textAlign: "center", marginBottom: 32, position: "relative" }}>
+        {/* Dark / Light toggle */}
+        <button
+          onClick={() => setDarkMode(d => !d)}
+          title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          style={{
+            position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+            background: darkMode ? "#1e3a5f" : "#e2e8f0",
+            border: `1px solid ${C.border}`,
+            borderRadius: 20, padding: "6px 14px", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 7,
+            fontSize: 12, fontFamily: "monospace", color: C.text,
+            transition: "all 0.2s",
+          }}
+        >
+          <span style={{ fontSize: 15 }}>{darkMode ? "☀️" : "🌙"}</span>
+          {darkMode ? "LIGHT" : "DARK"}
+        </button>
+
         <div style={{
           fontSize: 28, fontWeight: 900, letterSpacing: 4,
           background: `linear-gradient(90deg, ${C.accent1}, ${C.accent4}, ${C.accent5})`,
@@ -798,7 +829,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <ReferenceLine y={0.8} stroke={C.accent3} strokeDasharray="6 3" label={{ value: "80% target", fill: C.accent3, fontSize: 10 }} />
                         <Line dataKey="freqPower" name="Frequentist Power" stroke={C.accent1} strokeWidth={2} dot={false} />
@@ -822,7 +853,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="bucket" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "P-value bucket", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} />
+                        <Tooltip contentStyle={getTooltipStyle()} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Bar dataKey="withEffect" name="True Effect Exists" fill={C.accent1} opacity={0.8} />
                         <Bar dataKey="nullHypothesis" name="Null Hypothesis (H₀)" fill={C.accent2} opacity={0.8} />
@@ -845,7 +876,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="day" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Experiment Day", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
                         <ReferenceLine y={0.95} stroke={C.win} strokeDasharray="6 3" label={{ value: "95% threshold", fill: C.win, fontSize: 10 }} />
                         <ReferenceLine y={0.5} stroke={C.muted} strokeDasharray="3 3" />
                         <Area dataKey="high" name="Max P(B>A)" fill={C.accent4} fillOpacity={0.1} stroke="none" />
@@ -870,7 +901,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Line dataKey="freqFDR" name="Frequentist FDR" stroke={C.accent1} strokeWidth={2} dot={false} />
                         <Line dataKey="bayesFDR" name="Bayesian False Confidence" stroke={C.accent5} strokeWidth={2} dot={false} />
@@ -893,7 +924,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="trueEffect" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "True Effect Size", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => typeof v === "number" ? v.toFixed(4) : v} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => typeof v === "number" ? v.toFixed(4) : v} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Line dataKey="p95" name="95th Percentile" stroke={C.accent2} strokeWidth={1} strokeDasharray="4 2" dot={false} />
                         <Line dataKey="p75" name="75th Percentile" stroke={C.accent3} strokeWidth={1} dot={false} />
@@ -958,7 +989,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="baseline" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Baseline Mean (μ₀)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <ReferenceLine y={0.8} stroke={C.accent3} strokeDasharray="4 2" />
                         <Line dataKey="freqPower" name="Freq. Power" stroke={C.accent1} strokeWidth={2} dot={false} />
@@ -973,7 +1004,7 @@ export default function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="priorMean" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Prior Mean on Effect", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
                         <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Line dataKey="k1" name="κ₀ = 1 (diffuse)" stroke={C.accent4} strokeWidth={2} dot={false} />
                         <Line dataKey="k10" name="κ₀ = 10 (moderate)" stroke={C.accent5} strokeWidth={2} dot={false} />
