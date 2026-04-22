@@ -53,9 +53,10 @@ function randn() {
 }
 
 function sampleMean(mu, sigma, n) {
-  let sum = 0;
-  for (let i = 0; i < n; i++) sum += mu + sigma * randn();
-  return sum / n;
+  // If Xi ~ Normal(mu, sigma^2), then X̄ ~ Normal(mu, sigma^2 / n).
+  // Sampling X̄ directly is mathematically equivalent and avoids O(n) loops.
+  if (n <= 0) return mu;
+  return mu + (sigma / Math.sqrt(n)) * randn();
 }
 
 function tTest(xA, xB, sigmaA, sigmaB, nA, nB) {
@@ -102,7 +103,7 @@ function linspace(start, end, n) {
 function runSimulation(params, nTrials = 150) {
   const {
     samplesPerDayMin, samplesPerDayMax,
-    durationMin, durationMax,
+    durationDays,
     sigmaMin, sigmaMax,
     effectMin, effectMax,
     baselineMean,
@@ -111,7 +112,6 @@ function runSimulation(params, nTrials = 150) {
 
   const N_POINTS = 10;
   const spdRange = linspace(samplesPerDayMin, samplesPerDayMax, N_POINTS);
-  const durRange = linspace(durationMin, durationMax, N_POINTS);
   const sigRange = linspace(sigmaMin, sigmaMax, N_POINTS);
   const effRange = linspace(effectMin / 100, effectMax / 100, N_POINTS);
   const baseRange = linspace(baselineMean * 0.5, baselineMean * 1.5, N_POINTS);
@@ -120,7 +120,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── Power vs sample size ──
   const powerVsSampleSize = spdRange.map(spd => {
-    const totalN = Math.round(spd * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(spd * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
@@ -146,7 +146,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── P-value distribution ──
   const pValueDist = (() => {
-    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
@@ -176,7 +176,7 @@ function runSimulation(params, nTrials = 150) {
   // ── P(B>A) trajectory over days ──
   const pbaTraj = (() => {
     const spd = Math.round((samplesPerDayMin + samplesPerDayMax) / 2);
-    const maxDays = durationMax;
+    const maxDays = durationDays;
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
     const muA = baselineMean, muB = baselineMean + effect;
@@ -205,7 +205,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── Effect size estimation error ──
   const effectEstimation = effRange.map(eff => {
-    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const trueEffect = baselineMean * eff;
@@ -266,7 +266,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── FDR vs sample size ──
   const fdrVsN = spdRange.map(spd => {
-    const totalN = Math.round(spd * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(spd * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
@@ -299,7 +299,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── Baseline sensitivity ──
   const baselineSensitivity = baseRange.map(base => {
-    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = base * (effectMin + effectMax) / 200;
@@ -324,7 +324,7 @@ function runSimulation(params, nTrials = 150) {
 
   // ── Prior mean sensitivity ──
   const priorMeanSensitivity = priorMeanRange.map(pm => {
-    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * ((durationMin + durationMax) / 2));
+    const totalN = Math.round(((samplesPerDayMin + samplesPerDayMax) / 2) * durationDays);
     const n = Math.max(10, Math.round(totalN / 2));
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
@@ -576,7 +576,7 @@ export default function App() {
 
   const [params, setParams] = useState({
     samplesPerDayMin: 200, samplesPerDayMax: 2000,
-    durationMin: 7, durationMax: 60,
+    durationDays: 30,
     sigmaMin: 0.5, sigmaMax: 3.0,
     effectMin: 2, effectMax: 15,
     baselineMean: 10,
@@ -619,13 +619,12 @@ export default function App() {
     { id: "sensitivity", label: "Sensitivity" },
   ];
 
-  const avgDurationMid = (params.durationMin + params.durationMax) / 2;
-  const avgDurationLabel = Number.isInteger(avgDurationMid) ? avgDurationMid.toString() : avgDurationMid.toFixed(1);
+  const durationDays = Math.round(params.durationDays);
   const spdMid = Math.round((params.samplesPerDayMin + params.samplesPerDayMax) / 2);
-  const totalSamplesMid = Math.round(spdMid * avgDurationMid);
+  const totalSamplesMid = Math.round(spdMid * durationDays);
   const perVariantSamplesMid = Math.max(10, Math.round(totalSamplesMid / 2));
-  const totalSamplesMinBound = Math.round(params.samplesPerDayMin * avgDurationMid);
-  const totalSamplesMaxBound = Math.round(params.samplesPerDayMax * avgDurationMid);
+  const totalSamplesMinBound = Math.round(params.samplesPerDayMin * durationDays);
+  const totalSamplesMaxBound = Math.round(params.samplesPerDayMax * durationDays);
 
   const summaryMetrics = useMemo(() => {
     if (!results) return null;
@@ -686,9 +685,9 @@ export default function App() {
             <RangeSlider label="SAMPLES / DAY" min={50} max={5000} step={50}
               valueMin={params.samplesPerDayMin} valueMax={params.samplesPerDayMax}
               onChange={set("samplesPerDay")} description="Daily traffic per variant" />
-            <RangeSlider label="DURATION (DAYS)" min={3} max={90} step={1}
-              valueMin={params.durationMin} valueMax={params.durationMax}
-              onChange={set("duration")} description="Experiment window length" />
+            <SingleSlider label="DURATION (DAYS)" min={3} max={90} step={1}
+              value={params.durationDays} onChange={set("durationDays")}
+              description="Deterministic experiment duration (single value)" />
             <RangeSlider label="METRIC STD DEV (σ)" min={0.1} max={10} step={0.1}
               valueMin={params.sigmaMin} valueMax={params.sigmaMax}
               onChange={set("sigma")} description="Noise level in the metric" />
@@ -888,7 +887,7 @@ export default function App() {
                       </LineChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
-                      Footnote: Total sample size n is computed as samples/day × average duration, where average duration = (duration min + duration max) / 2. In this run, avg duration = {avgDurationLabel} days, so x-axis bounds are {params.samplesPerDayMin} × {avgDurationLabel} = {totalSamplesMinBound} and {params.samplesPerDayMax} × {avgDurationLabel} = {totalSamplesMaxBound}. Midpoint example: {spdMid} × {avgDurationLabel} = {totalSamplesMid}. Per-variant sample size used in tests is approx n/2 (midpoint: {perVariantSamplesMid} per arm).
+                      Footnote: Total sample size n is computed as samples/day × durationDays. In this run, durationDays = {durationDays}, so x-axis bounds are {params.samplesPerDayMin} × {durationDays} = {totalSamplesMinBound} and {params.samplesPerDayMax} × {durationDays} = {totalSamplesMaxBound}. Midpoint example: {spdMid} × {durationDays} = {totalSamplesMid}. Per-variant sample size used in tests is approx n/2 (midpoint: {perVariantSamplesMid} per arm).
                     </div>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent3}10`, borderRadius: 6, border: `1px solid ${C.accent3}30` }}>
                       💡 <strong style={{ color: C.accent3 }}>Insight:</strong> The S-curve transition from underpowered to overpowered region shows where your experiment crosses the 80% power threshold. Points left of this are unreliable — you'll miss true effects 20%+ of the time.
@@ -969,7 +968,7 @@ export default function App() {
                       </LineChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
-                      Footnote: For each point, total samples are n = samples/day × {avgDurationLabel}, where avg duration = (duration min + duration max) / 2. This yields bounds {totalSamplesMinBound} to {totalSamplesMaxBound}; tests use approx n/2 per variant (50/50 split).
+                      Footnote: For each point, total samples are n = samples/day × {durationDays}. This yields bounds {totalSamplesMinBound} to {totalSamplesMaxBound}; tests use approx n/2 per variant (50/50 split).
                     </div>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
                       ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> FDR is highest at small sample sizes — this is the "winner's curse" region where significant results are likely false positives. Both methods converge toward low FDR with large n, but Bayesian methods with strong priors can maintain low false confidence even at small n.

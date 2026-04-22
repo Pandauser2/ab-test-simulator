@@ -2,6 +2,25 @@
 
 Interactive Monte Carlo simulator comparing Frequentist vs Bayesian A/B testing methods.
 
+## Simulation Logic Notes
+
+### Performance optimization for large sample sizes
+
+To prevent browser freezes at very high `samples/day` and long durations, the simulator now samples group means directly instead of generating every individual observation.
+
+- Previous approach (slow): draw `n` samples from `Normal(μ, σ²)`, then compute the sample mean.
+- Current approach (fast): draw one value directly from the sampling distribution of the mean:
+
+\[
+\bar{X} \sim \text{Normal}\left(\mu, \frac{\sigma^2}{n}\right)
+\]
+
+This change is mathematically equivalent under the model assumption already used by the simulator (`Normal(μ, σ²)` observations), but reduces computational complexity from `O(n)` per mean draw to `O(1)`.
+
+Practical impact:
+- Same statistical interpretation under the current assumptions
+- Significantly better responsiveness for high-traffic / long-duration settings
+
 ## Local Development
 
 ```bash
