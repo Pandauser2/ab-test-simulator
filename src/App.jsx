@@ -8,15 +8,15 @@ import {
 // ─── THEME ────────────────────────────────────────────────────────────────────
 function makeTheme(dark) {
   return dark ? {
-    bg: "#0a0e1a", surface: "#111827", card: "#162032", border: "#1e3a5f",
-    accent1: "#00d4ff", accent2: "#ff6b6b", accent3: "#ffd166",
-    accent4: "#06ffa5", accent5: "#bf5af2",
-    text: "#e2e8f0", muted: "#64748b", win: "#06ffa5", lose: "#ff6b6b", neutral: "#94a3b8",
+    bg: "#0f172a", surface: "#111827", card: "#1f2937", border: "#334155",
+    accent1: "#38bdf8", accent2: "#f87171", accent3: "#f59e0b",
+    accent4: "#34d399", accent5: "#a78bfa",
+    text: "#f1f5f9", muted: "#94a3b8", win: "#34d399", lose: "#f87171", neutral: "#cbd5e1",
   } : {
-    bg: "#f0f4f8", surface: "#ffffff", card: "#ffffff", border: "#cbd5e1",
-    accent1: "#0284c7", accent2: "#e11d48", accent3: "#d97706",
-    accent4: "#059669", accent5: "#7c3aed",
-    text: "#1e293b", muted: "#64748b", win: "#059669", lose: "#e11d48", neutral: "#475569",
+    bg: "#f8fafc", surface: "#ffffff", card: "#ffffff", border: "#cbd5e1",
+    accent1: "#0369a1", accent2: "#b91c1c", accent3: "#b45309",
+    accent4: "#047857", accent5: "#6d28d9",
+    text: "#0f172a", muted: "#475569", win: "#047857", lose: "#b91c1c", neutral: "#334155",
   };
 }
 let C = makeTheme(true);
@@ -180,7 +180,10 @@ function runSimulation(params, nTrials = 150) {
     const sigma = (sigmaMin + sigmaMax) / 2;
     const effect = baselineMean * (effectMin + effectMax) / 200;
     const muA = baselineMean, muB = baselineMean + effect;
-    const days = linspace(1, maxDays, 20).map(Math.round);
+    const dayPointCount = Math.min(20, Math.max(2, Math.round(maxDays)));
+    const days = Array.from(
+      new Set(linspace(1, maxDays, dayPointCount).map(d => Math.max(1, Math.round(d))))
+    ).sort((a, b) => a - b);
     return days.map(d => {
       const n = Math.max(5, spd * d);
       let pbaSum = 0, pbaMin = 1, pbaMax = 0;
@@ -196,7 +199,7 @@ function runSimulation(params, nTrials = 150) {
         pbaMax = Math.max(pbaMax, pba);
       }
       const mean = pbaSum / M;
-      return { day: d, pba: mean, low: pbaMin, high: pbaMax };
+      return { day: d, pba: mean, low: pbaMin, high: pbaMax, band: Math.max(0, pbaMax - pbaMin) };
     });
   })();
 
@@ -553,7 +556,7 @@ function AssumptionsSection() {
             </div>
             {item.formula && (
               <div style={{
-                background: "#0a0e1a", borderRadius: 6, padding: "6px 10px",
+                background: C.bg, borderRadius: 6, padding: "6px 10px",
                 fontFamily: "monospace", fontSize: 11, color: C.accent3, marginBottom: 8,
               }}>{item.formula}</div>
             )}
@@ -567,6 +570,7 @@ function AssumptionsSection() {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const SIM_TRIALS = 150;
   const [darkMode, setDarkMode] = useState(true);
   C = makeTheme(darkMode); // update module-level theme on every render
 
@@ -584,6 +588,8 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [running, setRunning] = useState(false);
   const [activeTab, setActiveTab] = useState("power");
+  const [showScorecardDefs, setShowScorecardDefs] = useState(false);
+  const [showAssumptionsSection, setShowAssumptionsSection] = useState(true);
 
   const set = useCallback((key) => (val) => {
     if (Array.isArray(val)) {
@@ -597,7 +603,7 @@ export default function App() {
   const runSim = useCallback(() => {
     setRunning(true);
     setTimeout(() => {
-      const res = runSimulation(params, 150);
+      const res = runSimulation(params, SIM_TRIALS);
       setResults(res);
       setRunning(false);
     }, 50);
@@ -613,6 +619,14 @@ export default function App() {
     { id: "sensitivity", label: "Sensitivity" },
   ];
 
+  const avgDurationMid = (params.durationMin + params.durationMax) / 2;
+  const avgDurationLabel = Number.isInteger(avgDurationMid) ? avgDurationMid.toString() : avgDurationMid.toFixed(1);
+  const spdMid = Math.round((params.samplesPerDayMin + params.samplesPerDayMax) / 2);
+  const totalSamplesMid = Math.round(spdMid * avgDurationMid);
+  const perVariantSamplesMid = Math.max(10, Math.round(totalSamplesMid / 2));
+  const totalSamplesMinBound = Math.round(params.samplesPerDayMin * avgDurationMid);
+  const totalSamplesMaxBound = Math.round(params.samplesPerDayMax * avgDurationMid);
+
   const summaryMetrics = useMemo(() => {
     if (!results) return null;
     const last = results.powerVsSampleSize[results.powerVsSampleSize.length - 1];
@@ -622,6 +636,7 @@ export default function App() {
       freqPower: (last.freqPower * 100).toFixed(1) + "%",
       bayesPower: (last.bayesPower * 100).toFixed(1) + "%",
       pba: (mid.pba * 100).toFixed(1) + "%",
+      pbaMidDay: mid.day,
       freqFDR: (lastFDR.freqFDR * 100).toFixed(1) + "%",
       bayesFDR: (lastFDR.bayesFDR * 100).toFixed(1) + "%",
       requiredN: last.required === Infinity ? "∞" : last.required.toLocaleString(),
@@ -656,8 +671,7 @@ export default function App() {
 
         <div style={{
           fontSize: 28, fontWeight: 900, letterSpacing: 4,
-          background: `linear-gradient(90deg, ${C.accent1}, ${C.accent4}, ${C.accent5})`,
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          color: C.text,
           marginBottom: 6,
         }}>A/B TEST SIMULATOR</div>
         <div style={{ color: C.muted, fontSize: 12, letterSpacing: 3 }}>
@@ -713,15 +727,20 @@ export default function App() {
 
           <button onClick={runSim} disabled={running} style={{
             width: "100%", padding: "14px 0",
-            background: running ? C.border : `linear-gradient(90deg, ${C.accent1}80, ${C.accent4}80)`,
-            border: `1px solid ${running ? C.border : C.accent1}`,
-            color: running ? C.muted : C.text, borderRadius: 10,
+            background: `${C.accent1}22`,
+            border: `1px solid ${C.accent1}`,
+            color: C.text, borderRadius: 10,
             fontSize: 14, fontFamily: "monospace", letterSpacing: 3,
             cursor: running ? "not-allowed" : "pointer",
             transition: "all 0.2s",
           }}>
-            {running ? "⟳  SIMULATING..." : "▶  RUN SIMULATION"}
+            {running ? `⏱  RUNNING ${SIM_TRIALS} MONTE CARLO TRIALS / POINT...` : "▶  RUN SIMULATION"}
           </button>
+          <div style={{ marginTop: 8, color: C.muted, fontSize: 10 }}>
+            {running
+              ? `Running ${SIM_TRIALS} Monte Carlo simulations per sweep point.`
+              : `Will run ${SIM_TRIALS} Monte Carlo simulations per sweep point.`}
+          </div>
         </div>
 
         {/* Right panel — Results */}
@@ -774,7 +793,7 @@ export default function App() {
                     <div style={{ display: "grid", gap: 8 }}>
                       <MetricPill label="Decision Rate" value={summaryMetrics.bayesPower} color={C.accent4} />
                       <MetricPill label="False Conf." value={summaryMetrics.bayesFDR} color={C.accent2} />
-                      <MetricPill label="P(B>A) mid" value={summaryMetrics.pba} color={C.accent5} />
+                      <MetricPill label={`Mean P(B>A) @ day ${summaryMetrics.pbaMidDay}`} value={summaryMetrics.pba} color={C.accent5} />
                     </div>
                   </div>
                   <div>
@@ -803,6 +822,38 @@ export default function App() {
                   </div>
                 </div>
               </Card>
+              <div style={{ marginTop: 10, marginBottom: 14 }}>
+                <button
+                  onClick={() => setShowScorecardDefs(v => !v)}
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${C.border}`,
+                    color: C.muted,
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    fontSize: 11,
+                    fontFamily: "monospace",
+                    cursor: "pointer",
+                  }}
+                >
+                  {showScorecardDefs ? "▾ Hide scorecard definitions" : "▸ Show scorecard definitions"}
+                </button>
+                {showScorecardDefs && (
+                  <div style={{
+                    marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8,
+                    padding: 10, background: C.surface, color: C.muted, fontSize: 11, lineHeight: 1.55,
+                  }}>
+                    <div><strong style={{ color: C.text }}>Power (max n):</strong> Frequentist probability of detecting a real effect at the largest tested sample size.</div>
+                    <div><strong style={{ color: C.text }}>FDR (max n):</strong> False Discovery Rate, i.e. false positives divided by all positive decisions at max n.</div>
+                    <div><strong style={{ color: C.text }}>Required n:</strong> Approximate total sample size needed for 80% power under current assumptions.</div>
+                    <div><strong style={{ color: C.text }}>Decision Rate:</strong> Bayesian share of trials reaching the confidence threshold P(B&gt;A) &gt; 0.95 at max n.</div>
+                    <div><strong style={{ color: C.text }}>False Conf.:</strong> Bayesian false-confidence rate, analogous to FDR for confident Bayesian calls.</div>
+                    <div><strong style={{ color: C.text }}>Mean P(B&gt;A) @ midpoint day:</strong> Mean posterior probability at the midpoint day on the P(B&gt;A) chart (not the max value).</div>
+                    <div><strong style={{ color: C.text }}>Faster Decision:</strong> Method with higher decision/power rate under current settings.</div>
+                    <div><strong style={{ color: C.text }}>Lower Error:</strong> Method with lower false-positive/false-confidence rate under current settings.</div>
+                  </div>
+                )}
+              </div>
 
               {/* Chart tabs */}
               <Card title="▸ Charts" accent={C.accent1}>
@@ -825,17 +876,20 @@ export default function App() {
                       Statistical power across total sample sizes. Target: 80% (dashed). Bayesian "power" = P(B{">"} A) {">"} 0.95.
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={results.powerVsSampleSize} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.powerVsSampleSize} margin={{ top: 10, right: 130, bottom: 28, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
+                        <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "Power / Decision Rate", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
                         <ReferenceLine y={0.8} stroke={C.accent3} strokeDasharray="6 3" label={{ value: "80% target", fill: C.accent3, fontSize: 10 }} />
-                        <Line dataKey="freqPower" name="Frequentist Power" stroke={C.accent1} strokeWidth={2} dot={false} />
-                        <Line dataKey="bayesPower" name="Bayesian Decision Rate" stroke={C.accent4} strokeWidth={2} dot={false} />
+                        <Line dataKey="freqPower" name="Frequentist" stroke={C.accent1} strokeWidth={2} dot={false} />
+                        <Line dataKey="bayesPower" name="Bayesian" stroke={C.accent4} strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
+                    <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
+                      Footnote: Total sample size n is computed as samples/day × average duration, where average duration = (duration min + duration max) / 2. In this run, avg duration = {avgDurationLabel} days, so x-axis bounds are {params.samplesPerDayMin} × {avgDurationLabel} = {totalSamplesMinBound} and {params.samplesPerDayMax} × {avgDurationLabel} = {totalSamplesMaxBound}. Midpoint example: {spdMid} × {avgDurationLabel} = {totalSamplesMid}. Per-variant sample size used in tests is approx n/2 (midpoint: {perVariantSamplesMid} per arm).
+                    </div>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent3}10`, borderRadius: 6, border: `1px solid ${C.accent3}30` }}>
                       💡 <strong style={{ color: C.accent3 }}>Insight:</strong> The S-curve transition from underpowered to overpowered region shows where your experiment crosses the 80% power threshold. Points left of this are unreliable — you'll miss true effects 20%+ of the time.
                     </div>
@@ -849,14 +903,14 @@ export default function App() {
                       P-value histogram under true effect (blue) vs null hypothesis (red). Under null, distribution should be uniform.
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                      <BarChart data={results.pValueDist} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <BarChart data={results.pValueDist} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="bucket" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "P-value bucket", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="bucket" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "P-value Bucket", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Trial Count", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="withEffect" name="True Effect Exists" fill={C.accent1} opacity={0.8} />
-                        <Bar dataKey="nullHypothesis" name="Null Hypothesis (H₀)" fill={C.accent2} opacity={0.8} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
+                        <Bar dataKey="withEffect" name="True Effect" fill={C.accent1} opacity={0.8} />
+                        <Bar dataKey="nullHypothesis" name="Null (H0)" fill={C.accent2} opacity={0.8} />
                       </BarChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
@@ -872,17 +926,24 @@ export default function App() {
                       Bayesian posterior P(B{">"} A) evolving over experiment duration. Band shows trial-to-trial variability (min/max across 30 trials).
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                      <AreaChart data={results.pbaTraj} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.pbaTraj} margin={{ top: 10, right: 20, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="day" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Experiment Day", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
-                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
+                        <XAxis dataKey="day" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Experiment Day", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "P(B > A)", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
+                        <Tooltip
+                          contentStyle={getTooltipStyle()}
+                          formatter={(v, n) => {
+                            const val = `${(v * 100).toFixed(1)}%`;
+                            if (n === "Mean P(B>A)" || n === "Max P(B>A)" || n === "Min P(B>A)") return [val, n];
+                            return [val, n];
+                          }}
+                        />
                         <ReferenceLine y={0.95} stroke={C.win} strokeDasharray="6 3" label={{ value: "95% threshold", fill: C.win, fontSize: 10 }} />
                         <ReferenceLine y={0.5} stroke={C.muted} strokeDasharray="3 3" />
-                        <Area dataKey="high" name="Max P(B>A)" fill={C.accent4} fillOpacity={0.1} stroke="none" />
-                        <Area dataKey="low" name="Min P(B>A)" fill={C.bg} fillOpacity={1} stroke="none" />
-                        <Line dataKey="pba" name="Mean P(B>A)" stroke={C.accent4} strokeWidth={2.5} dot={false} />
-                      </AreaChart>
+                        <Line dataKey="high" name="Max P(B>A)" stroke={C.accent4} strokeOpacity={0.9} strokeWidth={1.6} strokeDasharray="4 3" dot={false} />
+                        <Line dataKey="low" name="Min P(B>A)" stroke={C.accent2} strokeOpacity={0.9} strokeWidth={1.6} strokeDasharray="4 3" dot={false} />
+                        <Line dataKey="pba" name="Mean P(B>A)" stroke={C.accent1} strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+                      </LineChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent4}10`, borderRadius: 6, border: `1px solid ${C.accent4}30` }}>
                       💡 <strong style={{ color: C.accent4 }}>Insight:</strong> Unlike frequentist p-values, you can monitor P(B{">"} A) daily without inflating error rates. The Bayesian framework naturally incorporates sequential evidence — but strong priors can pull the trajectory away from the data early on.
@@ -897,16 +958,19 @@ export default function App() {
                       False Discovery Rate as a function of total sample size. Lower is better. FDR = false positives / all positives.
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={results.fdrVsN} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.fdrVsN} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
+                        <XAxis dataKey="sampleSize" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Total Sample Size (n)", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "False Discovery Rate", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line dataKey="freqFDR" name="Frequentist FDR" stroke={C.accent1} strokeWidth={2} dot={false} />
-                        <Line dataKey="bayesFDR" name="Bayesian False Confidence" stroke={C.accent5} strokeWidth={2} dot={false} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
+                        <Line dataKey="freqFDR" name="Freq. FDR" stroke={C.accent1} strokeWidth={2} dot={false} />
+                        <Line dataKey="bayesFDR" name="Bayes. False Conf." stroke={C.accent5} strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
+                    <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
+                      Footnote: For each point, total samples are n = samples/day × {avgDurationLabel}, where avg duration = (duration min + duration max) / 2. This yields bounds {totalSamplesMinBound} to {totalSamplesMaxBound}; tests use approx n/2 per variant (50/50 split).
+                    </div>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
                       ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> FDR is highest at small sample sizes — this is the "winner's curse" region where significant results are likely false positives. Both methods converge toward low FDR with large n, but Bayesian methods with strong priors can maintain low false confidence even at small n.
                     </div>
@@ -917,21 +981,21 @@ export default function App() {
                 {activeTab === "effect" && (
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 12 }}>
-                      Estimated vs true effect size. Error bars show 5th–95th percentile. Bias = systematic over/underestimation.
+                      Estimated vs true effect size. X-axis is % lift vs baseline; Y-axis is absolute effect in metric units (not %). Error bars show 5th–95th percentile. Bias = systematic over/underestimation.
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={results.effectEstimation} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.effectEstimation} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="trueEffect" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "True Effect Size", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="trueEffect" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "True Effect Size", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={66} stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Estimated Effect (metric units)", angle: -90, position: "insideLeft", dx: -26, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => typeof v === "number" ? v.toFixed(4) : v} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line dataKey="p95" name="95th Percentile" stroke={C.accent2} strokeWidth={1} strokeDasharray="4 2" dot={false} />
-                        <Line dataKey="p75" name="75th Percentile" stroke={C.accent3} strokeWidth={1} dot={false} />
-                        <Line dataKey="estimatedMean" name="Mean Estimate" stroke={C.accent1} strokeWidth={2.5} dot={false} />
-                        <Line dataKey="trueVal" name="True Effect" stroke={C.accent4} strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
-                        <Line dataKey="p25" name="25th Percentile" stroke={C.accent3} strokeWidth={1} dot={false} />
-                        <Line dataKey="p5" name="5th Percentile" stroke={C.accent2} strokeWidth={1} strokeDasharray="4 2" dot={false} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
+                        <Line dataKey="p95" name="P95" stroke={C.accent2} strokeWidth={1} strokeDasharray="4 2" dot={false} />
+                        <Line dataKey="p75" name="P75" stroke={C.accent3} strokeWidth={1} dot={false} />
+                        <Line dataKey="estimatedMean" name="Mean" stroke={C.accent1} strokeWidth={2.5} dot={false} />
+                        <Line dataKey="trueVal" name="True" stroke={C.accent4} strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                        <Line dataKey="p25" name="P25" stroke={C.accent3} strokeWidth={1} dot={false} />
+                        <Line dataKey="p5" name="P5" stroke={C.accent2} strokeWidth={1} strokeDasharray="4 2" dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent3}10`, borderRadius: 6, border: `1px solid ${C.accent3}30` }}>
@@ -985,12 +1049,12 @@ export default function App() {
                     {/* Baseline sensitivity */}
                     <div style={{ marginBottom: 8, color: C.accent3, fontSize: 11, letterSpacing: 1 }}>BASELINE MEAN vs. OUTCOME</div>
                     <ResponsiveContainer width="100%" height={220}>
-                      <LineChart data={results.baselineSensitivity} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.baselineSensitivity} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="baseline" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Baseline Mean (μ₀)", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
+                        <XAxis dataKey="baseline" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Baseline Mean (μ0)", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "Power / P(B > A)", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
                         <ReferenceLine y={0.8} stroke={C.accent3} strokeDasharray="4 2" />
                         <Line dataKey="freqPower" name="Freq. Power" stroke={C.accent1} strokeWidth={2} dot={false} />
                         <Line dataKey="pba" name="P(B>A)" stroke={C.accent4} strokeWidth={2} dot={false} />
@@ -1000,15 +1064,15 @@ export default function App() {
                     {/* Prior mean sensitivity */}
                     <div style={{ marginTop: 20, marginBottom: 8, color: C.accent5, fontSize: 11, letterSpacing: 1 }}>PRIOR MEAN vs. P(B{">"} A) BY PRIOR STRENGTH</div>
                     <ResponsiveContainer width="100%" height={220}>
-                      <LineChart data={results.priorMeanSensitivity} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                      <LineChart data={results.priorMeanSensitivity} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="priorMean" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Prior Mean on Effect", position: "insideBottom", offset: -10, fill: C.muted, fontSize: 11 }} />
-                        <YAxis stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} />
+                        <XAxis dataKey="priorMean" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "Prior Mean on Effect", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "P(B > A)", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v, n) => [`${(v * 100).toFixed(1)}%`, n]} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line dataKey="k1" name="κ₀ = 1 (diffuse)" stroke={C.accent4} strokeWidth={2} dot={false} />
-                        <Line dataKey="k10" name="κ₀ = 10 (moderate)" stroke={C.accent5} strokeWidth={2} dot={false} />
-                        <Line dataKey="k50" name="κ₀ = 50 (strong)" stroke={C.accent2} strokeWidth={2} dot={false} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
+                        <Line dataKey="k1" name="κ₀=1" stroke={C.accent4} strokeWidth={2} dot={false} />
+                        <Line dataKey="k10" name="κ₀=10" stroke={C.accent5} strokeWidth={2} dot={false} />
+                        <Line dataKey="k50" name="κ₀=50" stroke={C.accent2} strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
 
@@ -1050,8 +1114,24 @@ export default function App() {
 
       {/* Full-width assumptions section */}
       {results && (
-        <div style={{ maxWidth: 1400, margin: "0 auto", marginTop: 0 }}>
-          <AssumptionsSection />
+        <div style={{ maxWidth: 1400, margin: "0 auto", marginTop: 18 }}>
+          <button
+            onClick={() => setShowAssumptionsSection(v => !v)}
+            style={{
+              background: "transparent",
+              border: `1px solid ${C.border}`,
+              color: C.muted,
+              borderRadius: 8,
+              padding: "6px 10px",
+              fontSize: 11,
+              fontFamily: "monospace",
+              cursor: "pointer",
+              marginBottom: showAssumptionsSection ? 10 : 0,
+            }}
+          >
+            {showAssumptionsSection ? "▾ Hide assumptions & calculations" : "▸ Show assumptions & calculations"}
+          </button>
+          {showAssumptionsSection && <AssumptionsSection />}
         </div>
       )}
     </div>
