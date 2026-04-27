@@ -744,7 +744,7 @@ export default function App() {
       <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20, maxWidth: 1400, margin: "0 auto" }}>
         {/* Left panel — Inputs */}
         <div>
-          <Card title="▸ Experiment Parameters" accent={C.border}>
+          <Card title="Experiment Parameters" accent={C.border}>
             <RangeSlider label="SAMPLES / DAY" min={50} max={5000} step={50}
               valueMin={params.samplesPerDayMin} valueMax={params.samplesPerDayMax}
               onChange={set("samplesPerDay")} description="Daily traffic per variant" />
@@ -759,13 +759,13 @@ export default function App() {
               onChange={set("effect")} unit="%" description="Minimum detectable effect as % of baseline" />
           </Card>
 
-          <Card title="▸ Baseline & Metric" accent={C.border}>
+          <Card title="Baseline & Metric" accent={C.border}>
             <SingleSlider label="BASELINE MEAN (μ₀)" min={0.1} max={100} step={0.1}
               value={params.baselineMean} onChange={set("baselineMean")}
               description="Control group expected value (e.g. 5 = 5% CVR or $5 AOV)" />
           </Card>
 
-          <Card title="▸ Bayesian Prior" accent={C.border}>
+          <Card title="Bayesian Prior" accent={C.border}>
             <SingleSlider label="PRIOR MEAN ON EFFECT" min={-5} max={5} step={0.1}
               value={params.priorMean} onChange={set("priorMean")}
               description="Prior belief about treatment effect. 0 = no effect expected (conservative)" />
@@ -840,7 +840,7 @@ export default function App() {
           {results && summaryMetrics && (
             <>
               {/* Summary scorecard */}
-              <Card title="▸ Summary Scorecard" accent={C.border}>
+              <Card title="Summary Scorecard" accent={C.border}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
                   <div>
                     <div style={{ color: C.freq, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>FREQUENTIST</div>
@@ -924,7 +924,7 @@ export default function App() {
               </div>
 
               {/* Chart tabs */}
-              <Card title="▸ Charts" accent={C.accent1}>
+              <Card title="Charts" accent={C.accent1}>
                 <div style={{ color: C.muted, fontSize: 11, marginBottom: 10, lineHeight: 1.5 }}>
                   How to read these charts: all curves and bars are Monte Carlo simulation estimates under the current assumptions and input ranges.
                   Re-running can slightly change values due to sampling noise.
