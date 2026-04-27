@@ -1202,6 +1202,26 @@ export default function App() {
           {showAssumptionsSection && <AssumptionsSection />}
         </div>
       )}
+
+      <div style={{ maxWidth: 1400, margin: "20px auto 0", textAlign: "center" }}>
+        <a
+          href="https://github.com/Pandauser2/ab-test-simulator/tree/main"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            color: C.muted,
+            fontSize: 11,
+            fontFamily: "monospace",
+            textDecoration: "none",
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            padding: "6px 10px",
+            display: "inline-block",
+          }}
+        >
+          GitHub Repository
+        </a>
+      </div>
     </div>
   );
 }
