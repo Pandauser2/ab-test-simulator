@@ -706,7 +706,7 @@ export default function App() {
     const totalNull = dist.reduce((s, d) => s + d.nullHypothesis, 0) || 1;
     let runningWith = 0;
     let runningNull = 0;
-    const cdf = dist.map((d, i) => {
+    const cdf = [{ threshold: 0, withEffectCDF: 0, nullCDF: 0, calibratedNull: 0 }, ...dist.map((d, i) => {
       runningWith += d.withEffect;
       runningNull += d.nullHypothesis;
       const threshold = (i + 1) / 20;
@@ -716,13 +716,9 @@ export default function App() {
         nullCDF: runningNull / totalNull,
         calibratedNull: threshold,
       };
-    });
+    })];
     return {
-      cdf,
-      sigBars: [
-        { scenario: "Effect Real", rate: dist[0].withEffect / totalWithEffect },
-        { scenario: "No Effect", rate: dist[0].nullHypothesis / totalNull },
-      ],
+      cdfFocus: cdf.filter(d => d.threshold <= 0.2),
       totalWithEffect,
       totalNull,
     };
@@ -1005,17 +1001,19 @@ export default function App() {
                 {activeTab === "pvalue" && pValueEvidence && (
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 12 }}>
-                      Evidence quality view: cumulative p-value behavior plus a direct p&lt;0.05 comparison.
+                      Evidence quality view: cumulative p-value behavior under true effect vs no effect.
                       Each scenario uses {pValueTrialsPerScenario} simulated experiments.
                     </div>
                     <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={pValueEvidence.cdf} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
+                      <LineChart data={pValueEvidence.cdfFocus} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis
                           dataKey="threshold"
                           stroke={C.muted}
                           tick={{ fontSize: 10 }}
                           tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                          domain={[0, 0.2]}
+                          type="number"
                           label={{ value: "P-value Threshold (x)", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }}
                         />
                         <YAxis
@@ -1037,22 +1035,6 @@ export default function App() {
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
                       Counts used: effect-real = {pValueEvidence.totalWithEffect}, no-effect = {pValueEvidence.totalNull}.
                     </div>
-                    <div style={{ marginTop: 14, color: C.muted, fontSize: 11, marginBottom: 10 }}>
-                      Direct view at 5% threshold (easier to compare detection vs false positives):
-                    </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={pValueEvidence.sigBars} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="scenario" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Scenario", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
-                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "Share with p < 0.05", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
-                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
-                        <Bar dataKey="rate" name="p < 0.05 rate">
-                          {pValueEvidence.sigBars.map((entry, idx) => (
-                            <Cell key={`cell-${idx}`} fill={entry.scenario === "Effect Real" ? C.freq : C.bad} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
                       ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> Red should follow the diagonal in the cumulative plot (calibrated null). Blue should rise above red. If red bends too high near low thresholds, false positives are inflated.
                     </div>
