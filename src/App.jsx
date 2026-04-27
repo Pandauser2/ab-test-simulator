@@ -11,11 +11,13 @@ function makeTheme(dark) {
     bg: "#0f172a", surface: "#111827", card: "#1f2937", border: "#334155",
     accent1: "#38bdf8", accent2: "#f87171", accent3: "#f59e0b",
     accent4: "#34d399", accent5: "#a78bfa",
+    freq: "#38bdf8", bayes: "#a78bfa", good: "#34d399", bad: "#f87171",
     text: "#f1f5f9", muted: "#94a3b8", win: "#34d399", lose: "#f87171", neutral: "#cbd5e1",
   } : {
     bg: "#f8fafc", surface: "#ffffff", card: "#ffffff", border: "#cbd5e1",
     accent1: "#0369a1", accent2: "#b91c1c", accent3: "#b45309",
     accent4: "#047857", accent5: "#6d28d9",
+    freq: "#0369a1", bayes: "#6d28d9", good: "#047857", bad: "#b91c1c",
     text: "#0f172a", muted: "#475569", win: "#047857", lose: "#b91c1c", neutral: "#334155",
   };
 }
@@ -431,20 +433,20 @@ function RangeSlider({ label, min, max, step, valueMin, valueMax, onChange, unit
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ color: C.accent1, fontSize: 12, fontFamily: "monospace", letterSpacing: 1 }}>{label}</span>
-        <span style={{ color: C.accent3, fontSize: 12, fontFamily: "monospace" }}>
+        <span style={{ color: C.text, fontSize: 12, fontFamily: "monospace", letterSpacing: 1 }}>{label}</span>
+        <span style={{ color: C.muted, fontSize: 12, fontFamily: "monospace" }}>
           [{valueMin}{unit} → {valueMax}{unit}]
         </span>
       </div>
       {description && <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>{description}</div>}
       {/* Color legend */}
       <div style={{ display: "flex", gap: 14, marginBottom: 5 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.accent1 }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent1, display: "inline-block" }} />
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.neutral, display: "inline-block" }} />
           Lower bound
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.accent2 }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent2, display: "inline-block" }} />
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.muted, display: "inline-block" }} />
           Upper bound
         </span>
       </div>
@@ -453,10 +455,10 @@ function RangeSlider({ label, min, max, step, valueMin, valueMax, onChange, unit
         <div style={{ flex: 1, position: "relative", height: 20 }}>
           <input type="range" min={min} max={max} step={step} value={valueMin}
             onChange={e => onChange([parseFloat(e.target.value), valueMax])}
-            style={{ position: "absolute", width: "100%", accentColor: C.accent1, cursor: "pointer" }} />
+            style={{ position: "absolute", width: "100%", accentColor: C.neutral, cursor: "pointer" }} />
           <input type="range" min={min} max={max} step={step} value={valueMax}
             onChange={e => onChange([valueMin, parseFloat(e.target.value)])}
-            style={{ position: "absolute", width: "100%", accentColor: C.accent2, cursor: "pointer", top: 8 }} />
+            style={{ position: "absolute", width: "100%", accentColor: C.muted, cursor: "pointer", top: 8 }} />
         </div>
         <span style={{ color: C.muted, fontSize: 11, width: 40, textAlign: "right" }}>{max}{unit}</span>
       </div>
@@ -468,13 +470,13 @@ function SingleSlider({ label, min, max, step, value, onChange, unit = "", descr
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ color: C.accent4, fontSize: 12, fontFamily: "monospace", letterSpacing: 1 }}>{label}</span>
-        <span style={{ color: C.accent3, fontSize: 12, fontFamily: "monospace" }}>{value}{unit}</span>
+        <span style={{ color: C.text, fontSize: 12, fontFamily: "monospace", letterSpacing: 1 }}>{label}</span>
+        <span style={{ color: C.muted, fontSize: 12, fontFamily: "monospace" }}>{value}{unit}</span>
       </div>
       {description && <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>{description}</div>}
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(parseFloat(e.target.value))}
-        style={{ width: "100%", accentColor: C.accent4, cursor: "pointer" }} />
+        style={{ width: "100%", accentColor: C.neutral, cursor: "pointer" }} />
     </div>
   );
 }
@@ -484,11 +486,11 @@ function Card({ title, children, accent = C.accent1 }) {
     <div style={{
       background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
       padding: 20, marginBottom: 20,
-      boxShadow: `0 0 20px ${accent}11`,
+      boxShadow: "none",
     }}>
       {title && (
         <div style={{
-          color: accent, fontSize: 13, fontFamily: "monospace", letterSpacing: 2,
+          color: C.text, fontSize: 13, fontFamily: "monospace", letterSpacing: 2,
           textTransform: "uppercase", marginBottom: 16, borderBottom: `1px solid ${C.border}`,
           paddingBottom: 10,
         }}>{title}</div>
@@ -569,13 +571,13 @@ function AssumptionsSection() {
   };
 
   return (
-    <Card title="⚙ Assumptions & Calculations" accent={C.accent5}>
+    <Card title="⚙ Assumptions & Calculations" accent={C.border}>
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {tabs.map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? `${C.accent5}30` : "transparent",
-            border: `1px solid ${tab === t ? C.accent5 : C.border}`,
-            color: tab === t ? C.accent5 : C.muted,
+            background: tab === t ? `${C.neutral}25` : "transparent",
+            border: `1px solid ${tab === t ? C.neutral : C.border}`,
+            color: tab === t ? C.text : C.muted,
             padding: "6px 16px", borderRadius: 20, cursor: "pointer",
             fontSize: 12, fontFamily: "monospace", textTransform: "uppercase", letterSpacing: 1,
           }}>{t}</button>
@@ -584,19 +586,19 @@ function AssumptionsSection() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
         {content[tab].map((item, i) => (
           <div key={i} style={{
-            background: item.warn ? `${C.accent2}08` : `${C.accent5}08`,
-            border: `1px solid ${item.warn ? C.accent2 + "40" : C.border}`,
+            background: item.warn ? `${C.bad}08` : `${C.neutral}12`,
+            border: `1px solid ${item.warn ? C.bad + "40" : C.border}`,
             borderRadius: 8, padding: 14,
           }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
               <span style={{ fontSize: 16 }}>{item.icon}</span>
-              <span style={{ color: item.warn ? C.accent2 : C.accent4, fontSize: 12, fontWeight: 700 }}>{item.title}</span>
-              {item.warn && <span style={{ color: C.accent2, fontSize: 10, marginLeft: "auto" }}>⚠ CAUTION</span>}
+              <span style={{ color: item.warn ? C.bad : C.text, fontSize: 12, fontWeight: 700 }}>{item.title}</span>
+              {item.warn && <span style={{ color: C.bad, fontSize: 10, marginLeft: "auto" }}>⚠ CAUTION</span>}
             </div>
             {item.formula && (
               <div style={{
                 background: C.bg, borderRadius: 6, padding: "6px 10px",
-                fontFamily: "monospace", fontSize: 11, color: C.accent3, marginBottom: 8,
+                fontFamily: "monospace", fontSize: 11, color: C.text, marginBottom: 8,
               }}>{item.formula}</div>
             )}
             <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.6 }}>{item.text}</div>
@@ -742,7 +744,7 @@ export default function App() {
       <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20, maxWidth: 1400, margin: "0 auto" }}>
         {/* Left panel — Inputs */}
         <div>
-          <Card title="▸ Experiment Parameters" accent={C.accent1}>
+          <Card title="▸ Experiment Parameters" accent={C.border}>
             <RangeSlider label="SAMPLES / DAY" min={50} max={5000} step={50}
               valueMin={params.samplesPerDayMin} valueMax={params.samplesPerDayMax}
               onChange={set("samplesPerDay")} description="Daily traffic per variant" />
@@ -757,13 +759,13 @@ export default function App() {
               onChange={set("effect")} unit="%" description="Minimum detectable effect as % of baseline" />
           </Card>
 
-          <Card title="▸ Baseline & Metric" accent={C.accent4}>
+          <Card title="▸ Baseline & Metric" accent={C.border}>
             <SingleSlider label="BASELINE MEAN (μ₀)" min={0.1} max={100} step={0.1}
               value={params.baselineMean} onChange={set("baselineMean")}
               description="Control group expected value (e.g. 5 = 5% CVR or $5 AOV)" />
           </Card>
 
-          <Card title="▸ Bayesian Prior" accent={C.accent5}>
+          <Card title="▸ Bayesian Prior" accent={C.border}>
             <SingleSlider label="PRIOR MEAN ON EFFECT" min={-5} max={5} step={0.1}
               value={params.priorMean} onChange={set("priorMean")}
               description="Prior belief about treatment effect. 0 = no effect expected (conservative)" />
@@ -774,8 +776,8 @@ export default function App() {
               value={params.priorVar} onChange={set("priorVar")}
               description="Uncertainty around prior mean. Larger = more diffuse prior" />
             <div style={{
-              background: params.priorStrength > 50 ? `${C.accent2}20` : `${C.accent5}10`,
-              border: `1px solid ${params.priorStrength > 50 ? C.accent2 : C.accent5}40`,
+              background: params.priorStrength > 50 ? `${C.bad}20` : `${C.neutral}15`,
+              border: `1px solid ${params.priorStrength > 50 ? C.bad : C.border}`,
               borderRadius: 8, padding: 10, fontSize: 11, color: C.muted, marginTop: 8,
             }}>
               {params.priorStrength > 50
@@ -787,8 +789,8 @@ export default function App() {
 
           <button onClick={runSim} disabled={running} style={{
             width: "100%", padding: "14px 0",
-            background: `${C.accent1}22`,
-            border: `1px solid ${C.accent1}`,
+            background: `${C.neutral}20`,
+            border: `1px solid ${C.border}`,
             color: C.text, borderRadius: 10,
             fontSize: 14, fontFamily: "monospace", letterSpacing: 3,
             cursor: running ? "not-allowed" : "pointer",
@@ -838,37 +840,37 @@ export default function App() {
           {results && summaryMetrics && (
             <>
               {/* Summary scorecard */}
-              <Card title="▸ Summary Scorecard" accent={C.accent3}>
+              <Card title="▸ Summary Scorecard" accent={C.border}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
                   <div>
-                    <div style={{ color: C.muted, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>FREQUENTIST</div>
+                    <div style={{ color: C.freq, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>FREQUENTIST</div>
                     <div style={{ display: "grid", gap: 8 }}>
-                      <MetricPill label="Power (max n)" value={summaryMetrics.freqPower} color={C.accent1} />
-                      <MetricPill label="FDR (max n)" value={summaryMetrics.freqFDR} color={C.accent2} />
-                      <MetricPill label="Required n" value={summaryMetrics.requiredN} color={C.accent3} />
+                      <MetricPill label="Power (max n)" value={summaryMetrics.freqPower} color={C.freq} />
+                      <MetricPill label="FDR (max n)" value={summaryMetrics.freqFDR} color={C.bad} />
+                      <MetricPill label="Required n" value={summaryMetrics.requiredN} color={C.neutral} />
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: C.muted, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>BAYESIAN</div>
+                    <div style={{ color: C.bayes, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>BAYESIAN</div>
                     <div style={{ display: "grid", gap: 8 }}>
-                      <MetricPill label="Decision Rate" value={summaryMetrics.bayesPower} color={C.accent4} />
-                      <MetricPill label="False Conf." value={summaryMetrics.bayesFDR} color={C.accent2} />
-                      <MetricPill label={`Mean P(B>A) @ day ${summaryMetrics.pbaMidDay}`} value={summaryMetrics.pba} color={C.accent5} />
+                      <MetricPill label="Decision Rate" value={summaryMetrics.bayesPower} color={C.bayes} />
+                      <MetricPill label="False Conf." value={summaryMetrics.bayesFDR} color={C.bad} />
+                      <MetricPill label={`Mean P(B>A) @ day ${summaryMetrics.pbaMidDay}`} value={summaryMetrics.pba} color={C.bayes} />
                     </div>
                   </div>
                   <div>
                     <div style={{ color: C.muted, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>COMPARISON</div>
                     <div style={{ display: "grid", gap: 8 }}>
                       <div style={{
-                        background: summaryMetrics.fasterDecision === "BAYESIAN"
-                          ? `${C.win}15`
-                          : summaryMetrics.fasterDecision === "FREQUENTIST"
-                            ? `${C.accent3}15`
-                            : `${C.neutral}15`,
+                        background: summaryMetrics.fasterDecision === "NONE"
+                          ? `${C.bad}15`
+                          : summaryMetrics.fasterDecision === "TIE"
+                            ? `${C.neutral}15`
+                            : `${C.good}15`,
                         border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", textAlign: "center",
                       }}>
                         <div style={{ color: C.muted, fontSize: 10, marginBottom: 4 }}>FASTER DECISION</div>
-                        <div style={{ color: C.accent4, fontSize: 14, fontWeight: 700 }}>
+                        <div style={{ color: summaryMetrics.fasterDecision === "NONE" ? C.bad : C.good, fontSize: 14, fontWeight: 700 }}>
                           {summaryMetrics.fasterDecision}
                         </div>
                         <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>
@@ -876,11 +878,11 @@ export default function App() {
                         </div>
                       </div>
                       <div style={{
-                        background: `${C.accent5}15`, border: `1px solid ${C.border}`,
+                        background: (Math.min(parseFloat(summaryMetrics.freqFDR), parseFloat(summaryMetrics.bayesFDR)) <= 10 ? `${C.good}15` : `${C.bad}15`), border: `1px solid ${C.border}`,
                         borderRadius: 8, padding: "8px 14px", textAlign: "center",
                       }}>
                         <div style={{ color: C.muted, fontSize: 10, marginBottom: 4 }}>LOWER ERROR</div>
-                        <div style={{ color: C.accent5, fontSize: 14, fontWeight: 700 }}>
+                        <div style={{ color: (Math.min(parseFloat(summaryMetrics.freqFDR), parseFloat(summaryMetrics.bayesFDR)) <= 10 ? C.good : C.bad), fontSize: 14, fontWeight: 700 }}>
                           {parseFloat(summaryMetrics.bayesFDR) < parseFloat(summaryMetrics.freqFDR) ? "BAYESIAN" : "FREQUENTIST"}
                         </div>
                       </div>
