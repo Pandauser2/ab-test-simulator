@@ -32,17 +32,11 @@ function normalCDF(x) {
 }
 
 function tCDF(t, df) {
-  // approximation using normal for large df, beta for small
-  if (df > 30) return normalCDF(t);
-  const x = df / (df + t * t);
-  // regularized incomplete beta approximation
-  let sum = 0, term = 1;
-  for (let i = 1; i <= 100; i++) {
-    term *= x * (i - 0.5) / i;
-    sum += term;
-  }
-  const p = 0.5 * (1 + (t >= 0 ? 1 : -1) * (1 - Math.sqrt(x) * (1 + sum)));
-  return Math.max(0, Math.min(1, p));
+  // Use normal approximation throughout — valid because data is generated
+  // from Normal distributions (CLT shortcut in sampleMean) and n >= 30
+  // per arm in typical A/B tests. The broken incomplete-beta series below
+  // produced garbage p-values for df < 30, corrupting power/FDR/concordance.
+  return normalCDF(t);
 }
 
 function randn() {
@@ -69,10 +63,20 @@ function tTest(xA, xB, sigmaA, sigmaB, nA, nB) {
 }
 
 function bayesianUpdate(priorMean, priorStrength, priorVar, data, sigma, n) {
-  const posteriorStrength = priorStrength + n;
-  const posteriorMean = (priorStrength * priorMean + n * data) / posteriorStrength;
-  const posteriorVar = sigma * sigma / posteriorStrength;
-  return { mean: posteriorMean, variance: posteriorVar, strength: posteriorStrength };
+  // Proper Normal-Normal conjugate update.
+  // priorVar is the prior variance (from the σ²_prior slider).
+  // priorStrength (κ₀) contributes additional precision: κ₀/σ².
+  // Combined prior precision = 1/priorVar + priorStrength/σ²
+  // This wires BOTH sliders into the math correctly.
+  const sigmaSq = sigma * sigma;
+  const priorPrecision = 1 / priorVar + priorStrength / sigmaSq;
+  const posteriorVar = 1 / (priorPrecision + n / sigmaSq);
+  const posteriorMean = posteriorVar * (
+    priorMean / priorVar +
+    (priorStrength * priorMean) / sigmaSq +
+    (n * data) / sigmaSq
+  );
+  return { mean: posteriorMean, variance: posteriorVar, strength: priorStrength + n };
 }
 
 function probBGreaterA(postA, postB, nSamples = 2000) {
@@ -87,10 +91,42 @@ function probBGreaterA(postA, postB, nSamples = 2000) {
   return count / nSamples;
 }
 
+// Rational probit approximation (Beasley-Springer-Moro, max error ~1e-9)
+function probit(p) {
+  const a = [0, -3.969683028665376e+01,  2.209460984245205e+02,
+                -2.759285104469687e+02,  1.383577518672690e+02,
+                -3.066479806614716e+01,  2.506628277459239e+00];
+  const b = [0, -5.447609879822406e+01,  1.615858368580409e+02,
+                -1.556989798598866e+02,  6.680131188771972e+01,
+                -1.328068155288572e+01];
+  const c = [0, -7.784894002430293e-03, -3.223964580411365e-01,
+                -2.400758277161838e+00, -2.549732539343734e+00,
+                 4.374664141464968e+00,  2.938163982698783e+00];
+  const d = [0,  7.784695709041462e-03,  3.224671290700398e-01,
+                 2.445134137142996e+00,  3.754408661907416e+00];
+  const pLow = 0.02425, pHigh = 1 - pLow;
+  let q, r;
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[1]*q+c[2])*q+c[3])*q+c[4])*q+c[5])*q+c[6]) /
+            ((((d[1]*q+d[2])*q+d[3])*q+d[4])*q+1);
+  } else if (p <= pHigh) {
+    q = p - 0.5; r = q * q;
+    return (((((a[1]*r+a[2])*r+a[3])*r+a[4])*r+a[5])*r+a[6])*q /
+           (((((b[1]*r+b[2])*r+b[3])*r+b[4])*r+b[5])*r+1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[1]*q+c[2])*q+c[3])*q+c[4])*q+c[5])*q+c[6]) /
+             ((((d[1]*q+d[2])*q+d[3])*q+d[4])*q+1);
+  }
+}
+
 function computeRequiredN(alpha, power, sigma, delta) {
   if (Math.abs(delta) < 1e-10) return Infinity;
-  const za = 1.96, zb = 0.842; // alpha=0.05, power=0.80
-  return Math.ceil(2 * Math.pow((za + zb) * sigma / delta, 2));
+  const za = -probit(alpha / 2);   // two-tailed critical value from alpha
+  const zb = -probit(1 - power);   // power critical value from power
+  const nPerArm = Math.ceil(2 * Math.pow((za + zb) * sigma / delta, 2));
+  return nPerArm * 2; // total N across both arms
 }
 
 function linspace(start, end, n) {
@@ -132,7 +168,7 @@ function runSimulation(params, nTrials = 150) {
       const { p } = tTest(xA, xB, sigma, sigma, n, n);
       if (p < 0.05) freqPower++;
       const postA = bayesianUpdate(priorMean, priorStrength, priorVar, xA, sigma, n);
-      const postB = bayesianUpdate(priorMean + effect, priorStrength, priorVar, xB, sigma, n);
+      const postB = bayesianUpdate(priorMean, priorStrength, priorVar, xB, sigma, n);
       const pb = probBGreaterA(postA, postB, 500);
       if (pb > 0.95) bayesPower++;
     }
@@ -192,7 +228,7 @@ function runSimulation(params, nTrials = 150) {
         const xA = sampleMean(muA, sigma, n);
         const xB = sampleMean(muB, sigma, n);
         const postA = bayesianUpdate(priorMean, priorStrength, priorVar, xA, sigma, n);
-        const postB = bayesianUpdate(priorMean + effect, priorStrength, priorVar, xB, sigma, n);
+        const postB = bayesianUpdate(priorMean, priorStrength, priorVar, xB, sigma, n);
         const pba = probBGreaterA(postA, postB, 300);
         pbaSum += pba;
         pbaMin = Math.min(pbaMin, pba);
@@ -246,10 +282,13 @@ function runSimulation(params, nTrials = 150) {
         for (let t = 0; t < M; t++) {
           const xA = sampleMean(muA, sigma, n);
           const xB = sampleMean(muB, sigma, n);
-          const { p } = tTest(xA, xB, sigma, sigma, n, n);
-          const freqDec = p < 0.05 ? "B" : "none";
+          const { t: tStat, p } = tTest(xA, xB, sigma, sigma, n, n);
+          // Symmetrised two-sided rule: p < 0.05 overall, direction from sign of t.
+          // Equivalent to one-sided p < 0.025 per direction. Matches Bayesian
+          // rule that can return "A", "B", or "none".
+          const freqDec = p < 0.05 ? (tStat >= 0 ? "B" : "A") : "none";
           const postA = bayesianUpdate(priorMean, priorStrength, priorVar, xA, sigma, n);
-          const postB = bayesianUpdate(priorMean + effect, priorStrength, priorVar, xB, sigma, n);
+          const postB = bayesianUpdate(priorMean, priorStrength, priorVar, xB, sigma, n);
           const pba = probBGreaterA(postA, postB, 300);
           const bayesDec = pba > 0.95 ? "B" : pba < 0.05 ? "A" : "none";
           if (freqDec === bayesDec) agree++;
@@ -288,7 +327,7 @@ function runSimulation(params, nTrials = 150) {
       const { p: p1 } = tTest(xA1, xB1, sigma, sigma, n, n);
       if (p1 < 0.05) tp++;
       const postA1 = bayesianUpdate(priorMean, priorStrength, priorVar, xA1, sigma, n);
-      const postB1 = bayesianUpdate(priorMean + effect, priorStrength, priorVar, xB1, sigma, n);
+      const postB1 = bayesianUpdate(priorMean, priorStrength, priorVar, xB1, sigma, n);
       const pba1 = probBGreaterA(postA1, postB1, 300);
       if (pba1 > 0.95) bayesTP++;
     }
@@ -311,7 +350,7 @@ function runSimulation(params, nTrials = 150) {
       const { p } = tTest(xA, xB, sigma, sigma, n, n);
       if (p < 0.05) freqSig++;
       const postA = bayesianUpdate(priorMean, priorStrength, priorVar, xA, sigma, n);
-      const postB = bayesianUpdate(priorMean + effect, priorStrength, priorVar, xB, sigma, n);
+      const postB = bayesianUpdate(priorMean, priorStrength, priorVar, xB, sigma, n);
       pbaSum += probBGreaterA(postA, postB, 300);
     }
     return {
@@ -337,7 +376,7 @@ function runSimulation(params, nTrials = 150) {
         const xA = sampleMean(muA, sigma, n);
         const xB = sampleMean(muB, sigma, n);
         const postA = bayesianUpdate(pm, k, priorVar, xA, sigma, n);
-        const postB = bayesianUpdate(pm + effect, k, priorVar, xB, sigma, n);
+        const postB = bayesianUpdate(pm, k, priorVar, xB, sigma, n);
         pbaSum += probBGreaterA(postA, postB, 200);
       }
       result[`k${k}`] = pbaSum / 50;
@@ -363,7 +402,7 @@ function runSimulation(params, nTrials = 150) {
           const xA = sampleMean(muA, sigma, n);
           const xB = sampleMean(muB, sigma, n);
           const postA = bayesianUpdate(priorMean, k, priorVar, xA, sigma, n);
-          const postB = bayesianUpdate(priorMean + effect, k, priorVar, xB, sigma, n);
+          const postB = bayesianUpdate(priorMean, k, priorVar, xB, sigma, n);
           const pba = probBGreaterA(postA, postB, 200);
           if (pba > 0.95 || pba < 0.05) confident++;
         }
@@ -500,17 +539,17 @@ function AssumptionsSection() {
       { icon: "📐", title: "Metric Distribution", text: "Observations modeled as Normal(μ, σ²). Justified by CLT for large n (n > 30 per group recommended). Violations occur with heavy-tailed metrics like revenue." },
       { icon: "🔀", title: "Independence", text: "Each user/trial is i.i.d. across days and groups. Network effects, carryover, and SUTVA violations are NOT modeled. In practice, cluster randomization may be needed." },
       { icon: "📅", title: "No Temporal Effects", text: "Treatment effect is stable over the experiment window. Novelty effects, seasonality, and ramp-up are excluded. Consider holdout validation in production.", warn: true },
-      { icon: "🔒", title: "Fixed Sample Size (Frequentist)", text: "P-values are valid only when sample size is fixed in advance. Peeking and early stopping inflate Type I error to ~20–30% even with α=0.05.", warn: true },
+      { icon: "🔒", title: "Fixed Sample Size (Frequentist z-test)", text: "z-test p-values are valid only when sample size is fixed in advance. Peeking and early stopping inflate Type I error to ~20–30% even with α=0.05.", warn: true },
       { icon: "🔔", title: "Conjugate Prior Family", text: "Normal-Normal conjugate for continuous metrics. This yields closed-form posterior updates. Beta-Binomial is standard for conversion rates (binary outcomes)." },
-      { icon: "⚖️", title: "Significance Threshold", text: "α = 0.05 (two-tailed), power target = 0.80. These are industry conventions, not statistical laws. High-stakes decisions warrant α = 0.01 or Bonferroni correction for multiple tests." },
+      { icon: "⚖️", title: "Significance Threshold", text: "Default α = 0.05 (two-tailed), power target = 0.80. In sample-size math, z_α/2 and z_β are derived from α and power via inverse normal CDF (probit), so different choices update required N accordingly. High-stakes decisions may warrant α = 0.01 or multiple-testing correction." },
     ],
     frequentist: [
-      { icon: "📊", title: "Two-Sample t-Statistic", formula: "t = (X̄_B − X̄_A) / √(2σ²/n)", text: "Measures how many standard errors separate the group means. Assumes equal variance and equal sample sizes." },
-      { icon: "🎯", title: "P-value", formula: "p = 2 × (1 − CDF_t(|t|, df=2n−2))", text: "Probability of observing a test statistic at least as extreme as |t| under the null hypothesis. NOT the probability that H₀ is true." },
-      { icon: "📏", title: "Required Sample Size", formula: "n = 2 × ((z_α/2 + z_β)² × σ²) / δ²", text: "Minimum n per group for z_α/2 = 1.96 (α=0.05), z_β = 0.842 (power=80%). Increases quadratically as δ shrinks." },
+      { icon: "📊", title: "Two-Sample z-Statistic", formula: "z = (X̄_B − X̄_A) / √(2σ²/n)", text: "Measures how many standard errors separate group means under known/assumed variance and equal sample sizes." },
+      { icon: "🎯", title: "P-value", formula: "p = 2 × (1 − Φ(|z|))", text: "Probability of observing a test statistic at least as extreme as |z| under the null hypothesis. NOT the probability that H₀ is true." },
+      { icon: "📏", title: "Required Sample Size", formula: "N_total = 2 × ⌈2 × ((z_α/2 + z_β)² × σ²) / δ²⌉", text: "Returns total N across both arms (matches chart x-axis). The inner term is per arm; z_α/2 and z_β are computed from α and power via probit." },
       { icon: "💪", title: "Statistical Power", formula: "Power = P(reject H₀ | H₁ true) = 1 − β", text: "Empirically computed as the fraction of simulation trials where p < 0.05 when a true effect exists." },
-      { icon: "📉", title: "Confidence Interval", formula: "CI = (X̄_B − X̄_A) ± t* × SE", text: "95% CI does NOT mean 95% probability the true effect lies within it. It means 95% of such intervals from repeated experiments contain the true effect." },
-      { icon: "🚨", title: "False Discovery Rate", formula: "FDR = FP / (FP + TP)", text: "Share of 'significant' results that are false positives. Increases with low prevalence of true effects and low power.", warn: true },
+      { icon: "📉", title: "Confidence Interval", formula: "CI = (X̄_B − X̄_A) ± z* × SE", text: "95% CI does NOT mean 95% probability the true effect lies within it. It means 95% of such intervals from repeated experiments contain the true effect." },
+      { icon: "🚨", title: "False Discovery Rate", formula: "FDR = FP / (FP + TP)  (here assuming 50% true-effect prevalence)", text: "Share of positive calls that are false positives under this simulation's equal null/effect mix. Increases with lower power and smaller n.", warn: true },
     ],
     bayesian: [
       { icon: "🧠", title: "Prior", formula: "μ ~ N(μ_prior, σ²_prior / κ₀)", text: "Encodes belief about the true treatment effect before seeing data. κ₀ = prior strength (pseudo-count). Higher κ₀ resists updating from data." },
@@ -675,6 +714,16 @@ export default function App() {
         }}>A/B TEST SIMULATOR</div>
         <div style={{ color: C.muted, fontSize: 12, letterSpacing: 3 }}>
           FREQUENTIST × BAYESIAN · MONTE CARLO ENGINE
+        </div>
+        <div style={{
+          margin: "10px auto 0",
+          maxWidth: 980,
+          color: C.muted,
+          fontSize: 11,
+          lineHeight: 1.5,
+          letterSpacing: 0.2,
+        }}>
+          Monte Carlo simulator for A/B design stress-testing. Assumes normal metrics, independent users, stable effects, and fixed-horizon frequentist z-test inference. Bayesian updates use a Normal-Normal prior. FDR is shown under a 50% true-effect prevalence assumption. Tune traffic, duration, noise, baseline, effect range, and priors to compare power, false positives, and decision confidence before running real experiments.
         </div>
       </div>
 
@@ -843,7 +892,7 @@ export default function App() {
                     padding: 10, background: C.surface, color: C.muted, fontSize: 11, lineHeight: 1.55,
                   }}>
                     <div><strong style={{ color: C.text }}>Power (max n):</strong> Frequentist probability of detecting a real effect at the largest tested sample size.</div>
-                    <div><strong style={{ color: C.text }}>FDR (max n):</strong> False Discovery Rate, i.e. false positives divided by all positive decisions at max n.</div>
+                    <div><strong style={{ color: C.text }}>FDR (max n):</strong> False Discovery Rate under this simulator's 50% true-effect prevalence assumption (equal null/effect trials).</div>
                     <div><strong style={{ color: C.text }}>Required n:</strong> Approximate total sample size needed for 80% power under current assumptions.</div>
                     <div><strong style={{ color: C.text }}>Decision Rate:</strong> Bayesian share of trials reaching the confidence threshold P(B&gt;A) &gt; 0.95 at max n.</div>
                     <div><strong style={{ color: C.text }}>False Conf.:</strong> Bayesian false-confidence rate, analogous to FDR for confident Bayesian calls.</div>
@@ -954,7 +1003,7 @@ export default function App() {
                 {activeTab === "fdr" && (
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 12 }}>
-                      False Discovery Rate as a function of total sample size. Lower is better. FDR = false positives / all positives.
+                      False Discovery Rate vs total sample size. Lower is better. Here FDR is computed under a 50% true-effect prevalence assumption (equal null/effect trials).
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
                       <LineChart data={results.fdrVsN} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
@@ -971,7 +1020,7 @@ export default function App() {
                       Footnote: For each point, total samples are n = samples/day × {durationDays}. This yields bounds {totalSamplesMinBound} to {totalSamplesMaxBound}; tests use approx n/2 per variant (50/50 split).
                     </div>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
-                      ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> FDR is highest at small sample sizes — this is the "winner's curse" region where significant results are likely false positives. Both methods converge toward low FDR with large n, but Bayesian methods with strong priors can maintain low false confidence even at small n.
+                      ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> FDR is highest at small sample sizes — this is the "winner's curse" region where positive calls are likely false. Values here assume a 50% true-effect prevalence; different prevalence changes absolute FDR levels.
                     </div>
                   </div>
                 )}
@@ -1136,3 +1185,40 @@ export default function App() {
     </div>
   );
 }
+
+/*
+ * STAT MATH TESTS (manual, non-production)
+ * Run by pasting into console or extracting manually.
+ *
+ * BEGIN_TESTS
+ * function assert(label, condition, detail = "") {
+ *   if (!condition) throw new Error(`FAIL: ${label} ${detail}`);
+ *   console.log(`PASS: ${label}`);
+ * }
+ *
+ * // normalCDF
+ * assert("normalCDF(0) ≈ 0.5", Math.abs(normalCDF(0) - 0.5) < 1e-6);
+ * assert("normalCDF(1.96) ≈ 0.975", Math.abs(normalCDF(1.96) - 0.975) < 1e-3);
+ *
+ * // probit
+ * assert("probit(0.5) ≈ 0", Math.abs(probit(0.5)) < 1e-4);
+ * assert("probit(0.975) ≈ 1.96", Math.abs(probit(0.975) - 1.96) < 1e-3);
+ *
+ * // tTest uses normal approximation via tCDF
+ * const nullRes = tTest(10, 10, 1, 1, 100, 100);
+ * assert("tTest null p high", nullRes.p > 0.9, `p=${nullRes.p}`);
+ * const strongRes = tTest(10, 11, 1, 1, 1000, 1000);
+ * assert("tTest strong effect p low", strongRes.p < 1e-6, `p=${strongRes.p}`);
+ *
+ * // bayesianUpdate sanity
+ * const postLargeN = bayesianUpdate(0, 10, 1, 5, 1, 10000);
+ * assert("posterior mean tracks data at large n", Math.abs(postLargeN.mean - 5) < 0.02, `mean=${postLargeN.mean}`);
+ *
+ * // computeRequiredN
+ * const req = computeRequiredN(0.05, 0.8, 1, 0.2);
+ * assert("required N is finite and reasonable", req > 100 && req < 2000, `N=${req}`);
+ * assert("tiny delta => Infinity", computeRequiredN(0.05, 0.8, 1, 0) === Infinity);
+ *
+ * console.log("All math tests passed.");
+ * END_TESTS
+ */
