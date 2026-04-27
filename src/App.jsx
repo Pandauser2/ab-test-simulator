@@ -654,7 +654,7 @@ export default function App() {
 
   const chartTabs = [
     { id: "power", label: "Power" },
-    { id: "pvalue", label: "P-Values" },
+    { id: "pvalue", label: "Evidence Quality" },
     { id: "pba", label: "P(B>A)" },
     { id: "fdr", label: "FDR" },
     { id: "effect", label: "Effect Est." },
@@ -668,6 +668,7 @@ export default function App() {
   const perVariantSamplesMid = Math.max(10, Math.round(totalSamplesMid / 2));
   const totalSamplesMinBound = Math.round(params.samplesPerDayMin * durationDays);
   const totalSamplesMaxBound = Math.round(params.samplesPerDayMax * durationDays);
+  const pValueTrialsPerScenario = SIM_TRIALS * 2;
 
   const summaryMetrics = useMemo(() => {
     if (!results) return null;
@@ -695,6 +696,35 @@ export default function App() {
         freqCross === Infinity && bayesCross === Infinity
           ? "Neither reaches 80%"
           : `to 80%: F=${freqCross === Infinity ? "∞" : freqCross.toLocaleString()}, B=${bayesCross === Infinity ? "∞" : bayesCross.toLocaleString()}`,
+    };
+  }, [results]);
+
+  const pValueEvidence = useMemo(() => {
+    if (!results) return null;
+    const dist = results.pValueDist;
+    const totalWithEffect = dist.reduce((s, d) => s + d.withEffect, 0) || 1;
+    const totalNull = dist.reduce((s, d) => s + d.nullHypothesis, 0) || 1;
+    let runningWith = 0;
+    let runningNull = 0;
+    const cdf = dist.map((d, i) => {
+      runningWith += d.withEffect;
+      runningNull += d.nullHypothesis;
+      const threshold = (i + 1) / 20;
+      return {
+        threshold,
+        withEffectCDF: runningWith / totalWithEffect,
+        nullCDF: runningNull / totalNull,
+        calibratedNull: threshold,
+      };
+    });
+    return {
+      cdf,
+      sigBars: [
+        { scenario: "Effect Real", rate: dist[0].withEffect / totalWithEffect },
+        { scenario: "No Effect", rate: dist[0].nullHypothesis / totalNull },
+      ],
+      totalWithEffect,
+      totalNull,
     };
   }, [results]);
 
@@ -972,24 +1002,59 @@ export default function App() {
                 )}
 
                 {/* P-value distribution */}
-                {activeTab === "pvalue" && (
+                {activeTab === "pvalue" && pValueEvidence && (
                   <div>
                     <div style={{ color: C.muted, fontSize: 11, marginBottom: 12 }}>
-                      P-value histogram under true effect (blue) vs null hypothesis (red). Under null, distribution should be uniform.
+                      Evidence quality view: cumulative p-value behavior plus a direct p&lt;0.05 comparison.
+                      Each scenario uses {pValueTrialsPerScenario} simulated experiments.
                     </div>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart data={results.pValueDist} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={pValueEvidence.cdf} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="bucket" stroke={C.muted} tick={{ fontSize: 9 }} label={{ value: "P-value Bucket", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
-                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Trial Count", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
-                        <Tooltip contentStyle={getTooltipStyle()} />
+                        <XAxis
+                          dataKey="threshold"
+                          stroke={C.muted}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                          label={{ value: "P-value Threshold (x)", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }}
+                        />
+                        <YAxis
+                          width={58}
+                          stroke={C.muted}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                          domain={[0, 1]}
+                          label={{ value: "Share with p ≤ x", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }}
+                        />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
                         <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
-                        <Bar dataKey="withEffect" name="True Effect" fill={C.accent1} opacity={0.8} />
-                        <Bar dataKey="nullHypothesis" name="Null (H0)" fill={C.accent2} opacity={0.8} />
+                        <ReferenceLine x={0.05} stroke={C.accent3} strokeDasharray="6 3" label={{ value: "5%", fill: C.accent3, fontSize: 10 }} />
+                        <Line dataKey="withEffectCDF" name="When effect is real" stroke={C.freq} strokeWidth={2.5} dot={false} />
+                        <Line dataKey="nullCDF" name="When no effect exists" stroke={C.bad} strokeWidth={2.5} dot={false} />
+                        <Line dataKey="calibratedNull" name="Ideal null calibration (y=x)" stroke={C.muted} strokeDasharray="4 3" strokeWidth={1.5} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
+                      Counts used: effect-real = {pValueEvidence.totalWithEffect}, no-effect = {pValueEvidence.totalNull}.
+                    </div>
+                    <div style={{ marginTop: 14, color: C.muted, fontSize: 11, marginBottom: 10 }}>
+                      Direct view at 5% threshold (easier to compare detection vs false positives):
+                    </div>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={pValueEvidence.sigBars} margin={{ top: 10, right: 130, bottom: 20, left: 56 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                        <XAxis dataKey="scenario" stroke={C.muted} tick={{ fontSize: 10 }} label={{ value: "Scenario", position: "insideBottom", offset: -8, fill: C.muted, fontSize: 10 }} />
+                        <YAxis width={58} stroke={C.muted} tick={{ fontSize: 10 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} label={{ value: "Share with p < 0.05", angle: -90, position: "insideLeft", dx: -22, fill: C.muted, fontSize: 10, style: { textAnchor: "middle" } }} />
+                        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
+                        <Bar dataKey="rate" name="p < 0.05 rate">
+                          {pValueEvidence.sigBars.map((entry, idx) => (
+                            <Cell key={`cell-${idx}`} fill={entry.scenario === "Effect Real" ? C.freq : C.bad} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 8, padding: 10, background: `${C.accent2}10`, borderRadius: 6, border: `1px solid ${C.accent2}30` }}>
-                      ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> Under H₀, p-values are uniformly distributed — every bucket has equal probability. The spike near p=0 under true effect is power. If your null distribution is NOT uniform, your randomization is broken.
+                      ⚠ <strong style={{ color: C.accent2 }}>Warning:</strong> Red should follow the diagonal in the cumulative plot (calibrated null). Blue should rise above red. If red bends too high near low thresholds, false positives are inflated.
                     </div>
                   </div>
                 )}
