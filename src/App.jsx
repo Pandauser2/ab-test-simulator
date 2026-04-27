@@ -552,11 +552,11 @@ function AssumptionsSection() {
       { icon: "🚨", title: "False Discovery Rate", formula: "FDR = FP / (FP + TP)  (here assuming 50% true-effect prevalence)", text: "Share of positive calls that are false positives under this simulation's equal null/effect mix. Increases with lower power and smaller n.", warn: true },
     ],
     bayesian: [
-      { icon: "🧠", title: "Prior", formula: "μ ~ N(μ_prior, σ²_prior / κ₀)", text: "Encodes belief about the true treatment effect before seeing data. κ₀ = prior strength (pseudo-count). Higher κ₀ resists updating from data." },
-      { icon: "🔄", title: "Posterior Update", formula: "μ_post = (κ₀×μ_prior + n×X̄) / (κ₀ + n)", text: "Posterior mean is a weighted average of prior and data. As n >> κ₀, data dominates. As κ₀ >> n, prior dominates." },
-      { icon: "📦", title: "Posterior Variance", formula: "σ²_post = σ² / (κ₀ + n)", text: "Posterior uncertainty shrinks as more data accumulates, regardless of what the data shows." },
+      { icon: "🧠", title: "Prior", formula: "Prior precision = 1/σ²_prior + κ₀/σ²", text: "Both prior sliders contribute to prior precision: σ²_prior (diffuseness) and κ₀ (pseudo-count-like strength)." },
+      { icon: "🔄", title: "Posterior Update", formula: "μ_post = σ²_post × (μ_prior/σ²_prior + κ₀μ_prior/σ² + nX̄/σ²)", text: "Posterior mean combines prior and data via precision weighting. As n grows, the data term dominates." },
+      { icon: "📦", title: "Posterior Variance", formula: "σ²_post = 1 / (1/σ²_prior + κ₀/σ² + n/σ²)", text: "Posterior uncertainty decreases as either stronger prior precision or more data is added." },
       { icon: "🏆", title: "P(B > A)", formula: "P(μ_B − μ_A > 0) via Monte Carlo sampling", text: "Direct probability that treatment is better than control. Intuitive and decision-relevant. NOT affected by peeking in the same way as p-values." },
-      { icon: "⚠️", title: "Prior Dominance Zone", formula: "When κ₀ > n: prior outweighs data", text: "In this region, two analysts with different priors will reach different conclusions from identical data. Results are non-replicable.", warn: true },
+      { icon: "⚠️", title: "Prior Dominance Zone", formula: "When 1/σ²_prior + κ₀/σ² >> n/σ²", text: "In this region, prior precision outweighs data precision and posterior decisions can diverge strongly from evidence.", warn: true },
       { icon: "💰", title: "Expected Loss", formula: "E[Loss] = E[max(μ_A − μ_B, 0)]", text: "Expected cost of choosing B when A is actually better. Decision-theoretic stopping criterion. Stop when E[Loss] < business threshold." },
     ],
     "monte carlo": [
@@ -670,6 +670,13 @@ export default function App() {
     const last = results.powerVsSampleSize[results.powerVsSampleSize.length - 1];
     const mid = results.pbaTraj[Math.floor(results.pbaTraj.length / 2)];
     const lastFDR = results.fdrVsN[results.fdrVsN.length - 1];
+    const targetRate = 0.8;
+    const freqCross = results.powerVsSampleSize.find(p => p.freqPower >= targetRate)?.sampleSize ?? Infinity;
+    const bayesCross = results.powerVsSampleSize.find(p => p.bayesPower >= targetRate)?.sampleSize ?? Infinity;
+    let fasterDecision = "TIE";
+    if (freqCross === Infinity && bayesCross === Infinity) fasterDecision = "NONE";
+    else if (freqCross < bayesCross) fasterDecision = "FREQUENTIST";
+    else if (bayesCross < freqCross) fasterDecision = "BAYESIAN";
     return {
       freqPower: (last.freqPower * 100).toFixed(1) + "%",
       bayesPower: (last.bayesPower * 100).toFixed(1) + "%",
@@ -678,6 +685,11 @@ export default function App() {
       freqFDR: (lastFDR.freqFDR * 100).toFixed(1) + "%",
       bayesFDR: (lastFDR.bayesFDR * 100).toFixed(1) + "%",
       requiredN: last.required === Infinity ? "∞" : last.required.toLocaleString(),
+      fasterDecision,
+      fasterDecisionDetail:
+        freqCross === Infinity && bayesCross === Infinity
+          ? "Neither reaches 80%"
+          : `to 80%: F=${freqCross === Infinity ? "∞" : freqCross.toLocaleString()}, B=${bayesCross === Infinity ? "∞" : bayesCross.toLocaleString()}`,
     };
   }, [results]);
 
@@ -848,13 +860,19 @@ export default function App() {
                     <div style={{ color: C.muted, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>COMPARISON</div>
                     <div style={{ display: "grid", gap: 8 }}>
                       <div style={{
-                        background: parseFloat(summaryMetrics.bayesPower) > parseFloat(summaryMetrics.freqPower)
-                          ? `${C.win}15` : `${C.accent3}15`,
+                        background: summaryMetrics.fasterDecision === "BAYESIAN"
+                          ? `${C.win}15`
+                          : summaryMetrics.fasterDecision === "FREQUENTIST"
+                            ? `${C.accent3}15`
+                            : `${C.neutral}15`,
                         border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", textAlign: "center",
                       }}>
                         <div style={{ color: C.muted, fontSize: 10, marginBottom: 4 }}>FASTER DECISION</div>
                         <div style={{ color: C.accent4, fontSize: 14, fontWeight: 700 }}>
-                          {parseFloat(summaryMetrics.bayesPower) > parseFloat(summaryMetrics.freqPower) ? "BAYESIAN" : "FREQUENTIST"}
+                          {summaryMetrics.fasterDecision}
+                        </div>
+                        <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>
+                          {summaryMetrics.fasterDecisionDetail}
                         </div>
                       </div>
                       <div style={{
@@ -897,7 +915,7 @@ export default function App() {
                     <div><strong style={{ color: C.text }}>Decision Rate:</strong> Bayesian share of trials reaching the confidence threshold P(B&gt;A) &gt; 0.95 at max n.</div>
                     <div><strong style={{ color: C.text }}>False Conf.:</strong> Bayesian false-confidence rate, analogous to FDR for confident Bayesian calls.</div>
                     <div><strong style={{ color: C.text }}>Mean P(B&gt;A) @ midpoint day:</strong> Mean posterior probability at the midpoint day on the P(B&gt;A) chart (not the max value).</div>
-                    <div><strong style={{ color: C.text }}>Faster Decision:</strong> Method with higher decision/power rate under current settings.</div>
+                    <div><strong style={{ color: C.text }}>Faster Decision:</strong> Method that reaches 80% on the Power chart at smaller total sample size (if both reach it).</div>
                     <div><strong style={{ color: C.text }}>Lower Error:</strong> Method with lower false-positive/false-confidence rate under current settings.</div>
                   </div>
                 )}
