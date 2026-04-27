@@ -6,7 +6,7 @@ Interactive Monte Carlo simulator comparing Frequentist vs Bayesian A/B testing 
 
 For a user-friendly walkthrough of formulas, assumptions, and metric interpretation, see:
 
-- [MATH_ASSUMPTIONS_GUIDE.md](./MATH_ASSUMPTIONS_GUIDE.md)
+- [A/B Simulator Math Guide](./AB_SIMULATOR_MATH_GUIDE.md)
 
 ## Simulation Logic Notes
 

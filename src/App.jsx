@@ -925,6 +925,10 @@ export default function App() {
 
               {/* Chart tabs */}
               <Card title="▸ Charts" accent={C.accent1}>
+                <div style={{ color: C.muted, fontSize: 11, marginBottom: 10, lineHeight: 1.5 }}>
+                  How to read these charts: all curves and bars are Monte Carlo simulation estimates under the current assumptions and input ranges.
+                  Re-running can slightly change values due to sampling noise.
+                </div>
                 <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
                   {chartTabs.map(t => (
                     <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
