@@ -614,7 +614,7 @@ function AssumptionsSection() {
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const SIM_TRIALS = 150;
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   C = makeTheme(darkMode); // update module-level theme on every render
 
   const [params, setParams] = useState({
@@ -631,7 +631,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [running, setRunning] = useState(false);
   const [activeTab, setActiveTab] = useState("power");
-  const [showScorecardDefs, setShowScorecardDefs] = useState(false);
+  const [showScorecardDefs, setShowScorecardDefs] = useState(true);
   const [showAssumptionsSection, setShowAssumptionsSection] = useState(true);
 
   const set = useCallback((key) => (val) => {
@@ -847,7 +847,7 @@ export default function App() {
                     <div style={{ display: "grid", gap: 8 }}>
                       <MetricPill label={`Power @ max n (${summaryMetrics.maxSampleSize})`} value={summaryMetrics.freqPower} color={C.freq} />
                       <MetricPill label="FDR (max n)" value={summaryMetrics.freqFDR} color={C.bad} />
-                      <MetricPill label="Required n" value={summaryMetrics.requiredN} color={C.neutral} />
+                      <MetricPill label="Required n (for 80% power under current assumptions)" value={summaryMetrics.requiredN} color={C.neutral} />
                     </div>
                   </div>
                   <div>
