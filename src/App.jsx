@@ -613,7 +613,7 @@ function AssumptionsSection() {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const SIM_TRIALS = 150;
+  const SIM_TRIALS = 500;
   const [darkMode, setDarkMode] = useState(false);
   C = makeTheme(darkMode); // update module-level theme on every render
 
@@ -803,6 +803,9 @@ export default function App() {
               ? `Running ${SIM_TRIALS} Monte Carlo simulations per sweep point.`
               : `Will run ${SIM_TRIALS} Monte Carlo simulations per sweep point.`}
           </div>
+          <div style={{ marginTop: 4, color: C.muted, fontSize: 10 }}>
+            Note: values might vary slightly due to simulation noise.
+          </div>
         </div>
 
         {/* Right panel — Results */}
@@ -816,7 +819,7 @@ export default function App() {
             }}>
               <div style={{ fontSize: 48 }}>◈</div>
               <div style={{ fontSize: 13, letterSpacing: 2 }}>SET PARAMETERS AND RUN SIMULATION</div>
-              <div style={{ fontSize: 11, color: C.border }}>150 Monte Carlo trials × 10 sweep points</div>
+              <div style={{ fontSize: 11, color: C.border }}>{SIM_TRIALS} Monte Carlo trials × 10 sweep points</div>
             </div>
           )}
 
