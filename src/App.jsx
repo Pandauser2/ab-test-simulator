@@ -12,12 +12,14 @@ function makeTheme(dark) {
     accent1: "#38bdf8", accent2: "#f87171", accent3: "#f59e0b",
     accent4: "#34d399", accent5: "#a78bfa",
     freq: "#38bdf8", bayes: "#a78bfa", good: "#34d399", bad: "#f87171",
+    boundLow: "#cbd5e1", boundHigh: "#64748b",
     text: "#f1f5f9", muted: "#94a3b8", win: "#34d399", lose: "#f87171", neutral: "#cbd5e1",
   } : {
     bg: "#f8fafc", surface: "#ffffff", card: "#ffffff", border: "#cbd5e1",
     accent1: "#0369a1", accent2: "#b91c1c", accent3: "#b45309",
     accent4: "#047857", accent5: "#6d28d9",
     freq: "#0369a1", bayes: "#6d28d9", good: "#047857", bad: "#b91c1c",
+    boundLow: "#334155", boundHigh: "#94a3b8",
     text: "#0f172a", muted: "#475569", win: "#047857", lose: "#b91c1c", neutral: "#334155",
   };
 }
@@ -441,12 +443,12 @@ function RangeSlider({ label, min, max, step, valueMin, valueMax, onChange, unit
       {description && <div style={{ color: C.muted, fontSize: 11, marginBottom: 6 }}>{description}</div>}
       {/* Color legend */}
       <div style={{ display: "flex", gap: 14, marginBottom: 5 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.neutral, display: "inline-block" }} />
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.boundLow }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.boundLow, display: "inline-block" }} />
           Lower bound
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.muted }}>
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.muted, display: "inline-block" }} />
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: C.boundHigh }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.boundHigh, display: "inline-block" }} />
           Upper bound
         </span>
       </div>
@@ -455,10 +457,10 @@ function RangeSlider({ label, min, max, step, valueMin, valueMax, onChange, unit
         <div style={{ flex: 1, position: "relative", height: 20 }}>
           <input type="range" min={min} max={max} step={step} value={valueMin}
             onChange={e => onChange([parseFloat(e.target.value), valueMax])}
-            style={{ position: "absolute", width: "100%", accentColor: C.neutral, cursor: "pointer" }} />
+            style={{ position: "absolute", width: "100%", accentColor: C.boundLow, cursor: "pointer" }} />
           <input type="range" min={min} max={max} step={step} value={valueMax}
             onChange={e => onChange([valueMin, parseFloat(e.target.value)])}
-            style={{ position: "absolute", width: "100%", accentColor: C.muted, cursor: "pointer", top: 8 }} />
+            style={{ position: "absolute", width: "100%", accentColor: C.boundHigh, cursor: "pointer", top: 8 }} />
         </div>
         <span style={{ color: C.muted, fontSize: 11, width: 40, textAlign: "right" }}>{max}{unit}</span>
       </div>
@@ -687,6 +689,7 @@ export default function App() {
       freqFDR: (lastFDR.freqFDR * 100).toFixed(1) + "%",
       bayesFDR: (lastFDR.bayesFDR * 100).toFixed(1) + "%",
       requiredN: last.required === Infinity ? "∞" : last.required.toLocaleString(),
+      maxSampleSize: last.sampleSize.toLocaleString(),
       fasterDecision,
       fasterDecisionDetail:
         freqCross === Infinity && bayesCross === Infinity
@@ -726,9 +729,6 @@ export default function App() {
           color: C.text,
           marginBottom: 6,
         }}>A/B TEST SIMULATOR</div>
-        <div style={{ color: C.muted, fontSize: 12, letterSpacing: 3 }}>
-          FREQUENTIST × BAYESIAN · MONTE CARLO ENGINE
-        </div>
         <div style={{
           margin: "10px auto 0",
           maxWidth: 980,
@@ -845,7 +845,7 @@ export default function App() {
                   <div>
                     <div style={{ color: C.freq, fontSize: 10, marginBottom: 8, letterSpacing: 2 }}>FREQUENTIST</div>
                     <div style={{ display: "grid", gap: 8 }}>
-                      <MetricPill label="Power (max n)" value={summaryMetrics.freqPower} color={C.freq} />
+                      <MetricPill label={`Power @ max n (${summaryMetrics.maxSampleSize})`} value={summaryMetrics.freqPower} color={C.freq} />
                       <MetricPill label="FDR (max n)" value={summaryMetrics.freqFDR} color={C.bad} />
                       <MetricPill label="Required n" value={summaryMetrics.requiredN} color={C.neutral} />
                     </div>
@@ -911,7 +911,7 @@ export default function App() {
                     marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8,
                     padding: 10, background: C.surface, color: C.muted, fontSize: 11, lineHeight: 1.55,
                   }}>
-                    <div><strong style={{ color: C.text }}>Power (max n):</strong> Frequentist probability of detecting a real effect at the largest tested sample size.</div>
+                    <div><strong style={{ color: C.text }}>Power @ max n:</strong> Frequentist power at the largest tested total sample size shown on the Power chart.</div>
                     <div><strong style={{ color: C.text }}>FDR (max n):</strong> False Discovery Rate under this simulator's 50% true-effect prevalence assumption (equal null/effect trials).</div>
                     <div><strong style={{ color: C.text }}>Required n:</strong> Approximate total sample size needed for 80% power under current assumptions.</div>
                     <div><strong style={{ color: C.text }}>Decision Rate:</strong> Bayesian share of trials reaching the confidence threshold P(B&gt;A) &gt; 0.95 at max n.</div>
@@ -951,8 +951,8 @@ export default function App() {
                         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => `${(v * 100).toFixed(1)}%`} />
                         <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 10, lineHeight: "18px" }} />
                         <ReferenceLine y={0.8} stroke={C.accent3} strokeDasharray="6 3" label={{ value: "80% target", fill: C.accent3, fontSize: 10 }} />
-                        <Line dataKey="freqPower" name="Frequentist" stroke={C.accent1} strokeWidth={2} dot={false} />
-                        <Line dataKey="bayesPower" name="Bayesian" stroke={C.accent4} strokeWidth={2} dot={false} />
+                        <Line dataKey="freqPower" name="Frequentist" stroke={C.freq} strokeWidth={2} dot={false} />
+                        <Line dataKey="bayesPower" name="Bayesian" stroke={C.bayes} strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
                     <div style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
